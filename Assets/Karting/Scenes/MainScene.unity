@@ -18100,8 +18100,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 05ee481059e048e439f5fdf43f3e9d67, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  text: {fileID: 0}
-  model: 1
+  text: {fileID: 4900000, guid: 38fa71c0d594c8d4d9b501da53d167e0, type: 3}
+  model: 0
   agentEnable: 1
 --- !u!1001 &1931383003
 PrefabInstance:
