@@ -1,6 +1,7 @@
 using Palmmedia.ReportGenerator.Core.Parser.Analysis;
 using System.Collections.Generic;
 using System.IO;
+using System.Security.Cryptography;
 using Unity.Plastic.Newtonsoft.Json;
 using UnityEngine;
 using static DecisionTree;
@@ -9,6 +10,9 @@ public class MLPParameters
 {
     List<float[,]> coeficients;
     List<float[]> intercepts;
+
+    public List<float[,]> Coeficients { get => coeficients; private set => coeficients = value; }
+    public List<float[]> Intercepts { get => intercepts; private set => intercepts = value; }
 
     public MLPParameters(int numLayers)
     {
@@ -54,22 +58,48 @@ public class MLPModel
         mlpParameters = p;
     }
 
-    /// <summary>
-    /// Parameters required for model input. By default it will be perception, kart position and time, 
-    /// but depending on the data cleaning and data acquisition modificiations made by each one, the input will need more parameters.
-    /// </summary>
-    /// <param name="p">The Agent perception</param>
-    /// <returns>The action label</returns>
-    public float[] FeedForward(Perception p, Transform transform)
+    public float[] FeedForward(float[] input, Transform transform)
     {
-        Parameters parameters = Record.ReadParameters(8, Time.timeSinceLevelLoad, p, transform);
-        float[] input=parameters.ConvertToFloatArrat();
-        Debug.Log("input " + input.Length);
+        Debug.Log("Input: " + input.Length);
 
-        //TODO: implement feedworward.
-        //the size of the output layer depends on what actions you have performed in the game.
-        //By default it is 7 (number of possible actions) but some actions may not have been performed and therefore the model has assumed that they do not exist.
-        return new float[7];
+        int numLayers = mlpParameters.Coeficients.Count + 1;
+        float[] layerOutput = input;
+
+        for (int i = 0; i < numLayers - 1; i++)
+        {
+            layerOutput = PropagateLayer(layerOutput, mlpParameters.Coeficients[i], mlpParameters.Intercepts[i]);
+        }
+
+        return layerOutput;
+    }
+
+    private float[] PropagateLayer(float[] input, float[,] weights, float[] biases)
+    {
+        int numNeurons = biases.Length;
+        int inputSize = input.Length;
+
+        float[] output = new float[numNeurons];
+
+        for (int i = 0; i < numNeurons; i++)
+        {
+            float neuronSum = 0;
+
+            for (int j = 0; j < inputSize; j++)
+            {
+                neuronSum += input[j] * weights[j, i];
+            }
+
+            neuronSum += biases[i];
+
+            output[i] = Sigmoid(neuronSum);
+        }
+
+        return output;
+    }
+
+    private float Sigmoid(float x)
+    {
+        return 1.0f / (1.0f + Mathf.Exp(-x));
     }
 
     /// <summary>
@@ -80,8 +110,22 @@ public class MLPModel
     /// <returns></returns>
     public Labels ConvertIndexToLabel(int index)
     {
-        //TODO: implement the conversion from index to actions.
-        return Labels.NONE;
+        Labels label = Labels.NONE;
+
+        switch (index)
+        {
+            case 0:
+                label = Labels.ACCELERATE;
+                break;
+            case 1:
+                label = Labels.LEFT_ACCELERATE;
+                break;
+            case 2:
+                label = Labels.RIGHT_ACCELERATE;
+                break;
+        }
+
+        return label;
     }
 
     public Labels Predict(float[] output)
@@ -94,7 +138,6 @@ public class MLPModel
 
     public int GetIndexMaxValue(float[] output, out float max)
     {
-        max = output[0];
         max = output[0];
         int index = 0;
         for(int i = 1; i < output.Length; i++)
@@ -252,6 +295,7 @@ public class MLAgent : MonoBehaviour
     {
         Parameters parameters = Record.ReadParameters(8, Time.timeSinceLevelLoad, perception, transform);
         float[] inputParams = parameters.ConvertToFloatArrat();
+
         //quitamos el indice 6 que es kartY porque no lo usamos
         List<float> inputParamsList = new List<float>(inputParams);
         inputParamsList.RemoveAt(6);
@@ -267,7 +311,7 @@ public class MLAgent : MonoBehaviour
         switch (model)
         {
             case ModelType.MLP:
-                float[] outputs = this.mlpModel.FeedForward(perception,this.transform);
+                float[] outputs = this.mlpModel.FeedForward(inputParams,this.transform);
                 label = this.mlpModel.Predict(outputs);
                 break;
             case ModelType.DT:
@@ -286,8 +330,6 @@ public class MLAgent : MonoBehaviour
                         label = Labels.RIGHT_ACCELERATE;
                         break;
                 }
-
-                Debug.Log(label.ToString());
 
                 break;
         }
@@ -378,7 +420,7 @@ public class MLAgent : MonoBehaviour
                             else
                             {
                                 coefficient = false;
-                                mlpParameters.CreateIntercept(currentParameter, currentDimension[1]);
+                                mlpParameters.CreateIntercept(currentParameter, currentDimension[0]);
                             }
 
                         }
